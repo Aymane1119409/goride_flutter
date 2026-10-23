@@ -44,7 +44,7 @@ lib/
 │   ├── local/              database SQLite (sqflite): corse, corsa_attiva
 │   ├── remote/             mock dei mezzi attorno ad Ancona
 │   └── repositories/       Vehicle, User, Ride, Review (unica porta verso i dati)
-├── ui/                     schermate + ViewModel (ChangeNotifier) per sezione
+├── ui/                     schermate per sezione (StatefulWidget) + RideViewModel
 │   ├── auth/               login, registrazione, recupero password, profilo
 │   ├── map/                mappa Google, dettaglio mezzo
 │   ├── ride/               corsa con timer, scadenza, estensione
@@ -56,7 +56,7 @@ lib/
 
 ## Scelte principali
 
-- Architettura **MVVM**: schermata → ViewModel (`ChangeNotifier`) → Repository → dati.
+- Architettura: schermata (`StatefulWidget` con `setState`, `FutureBuilder`, `StreamBuilder`) → Repository → dati. Solo la corsa usa un `RideViewModel` (`ChangeNotifier`), perché il timer deve sopravvivere anche uscendo dalla schermata.
 - Stato condiviso con un **`InheritedWidget`** (`AppScope`), senza librerie esterne.
 - Navigazione con **rotte con nome** e argomenti.
 - Database locale con **sqflite**, dati remoti con **Cloud Firestore**.

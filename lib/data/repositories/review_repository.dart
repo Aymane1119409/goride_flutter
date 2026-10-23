@@ -22,7 +22,7 @@ class ReviewRepository {
   static const String _campoVehicleId = 'vehicleId';
 
   /// RF14 — ascolto realtime. Il listener resta attivo finché qualcuno è
-  /// iscritto allo Stream: quando il ViewModel cancella l'iscrizione, Firestore
+  /// iscritto allo Stream: quando lo StreamBuilder cancella l'iscrizione, Firestore
   /// smette di ascoltare (come `fermaAscolto()` in Kotlin).
   Stream<List<Review>> osservaRecensioni() {
     return _db

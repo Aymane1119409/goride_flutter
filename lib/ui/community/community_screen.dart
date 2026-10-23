@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_scope.dart';
 import '../../app/routes.dart';
+import '../../data/models/review.dart';
 import '../../util/colori.dart';
 import '../common/widget_comuni.dart';
-import 'community_viewmodel.dart';
 import 'review_card.dart';
 
-/// Sezione "Community" (RF12, RF14) — equivalente di `CommunityFragment`.
-/// La lista si aggiorna da sola quando qualcuno pubblica (anche dall'app Kotlin).
+/// Sezione "Community" (RF12, RF14).
+///
+/// Le recensioni arrivano in tempo reale da Firestore come `Stream` e vengono
+/// mostrate con uno `StreamBuilder`: quando qualcuno pubblica (anche dall'app
+/// Kotlin) la lista si aggiorna da sola. Quando la schermata viene chiusa lo
+/// StreamBuilder cancella l'iscrizione e Firestore smette di ascoltare.
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
 
@@ -17,35 +21,34 @@ class CommunityScreen extends StatefulWidget {
 }
 
 class _CommunityScreenState extends State<CommunityScreen> {
-  CommunityViewModel? _viewModel;
+  /// Creato una sola volta, non dentro build.
+  Stream<List<Review>>? _recensioni;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _viewModel ??= CommunityViewModel(AppScope.of(context).reviewRepository);
-  }
-
-  @override
-  void dispose() {
-    _viewModel?.dispose();
-    super.dispose();
+    _recensioni ??= AppScope.of(context).reviewRepository.osservaRecensioni();
   }
 
   @override
   Widget build(BuildContext context) {
-    final vm = _viewModel!;
-
     return Scaffold(
       backgroundColor: Colori.grigioSfondo,
       body: Column(
         children: [
           const Intestazione('Community'),
           Expanded(
-            child: ListenableBuilder(
-              listenable: vm,
-              builder: (context, _) {
-                final recensioni = vm.recensioni;
-                if (recensioni == null) return const Caricamento(visibile: true);
+            child: StreamBuilder<List<Review>>(
+              stream: _recensioni,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const StatoVuoto(
+                    titolo: 'Errore di connessione',
+                    messaggio: 'Impossibile caricare le recensioni',
+                  );
+                }
+                if (!snapshot.hasData) return const Caricamento(visibile: true);
+                final recensioni = snapshot.data!;
                 if (recensioni.isEmpty) {
                   return const StatoVuoto(
                     titolo: 'Ancora nessuna recensione',

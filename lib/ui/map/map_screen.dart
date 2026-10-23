@@ -8,13 +8,13 @@ import '../../data/models/vehicle.dart';
 import '../../data/remote/mock_vehicle_data_source.dart';
 import '../../util/colori.dart';
 import '../common/widget_comuni.dart';
-import 'map_viewmodel.dart';
 import 'vehicle_detail_sheet.dart';
 
-/// Sezione "Mappa" (RF1, RF2) — equivalente di `MapFragment`.
+/// Sezione "Mappa" (RF1, RF2): mezzi disponibili su Google Maps.
 ///
-/// È un "UI controller" puro: osserva il ViewModel, disegna i marker e gestisce
-/// il permesso di posizione. La logica sta nel MapViewModel.
+/// I mezzi arrivano da un `Future` e vengono mostrati con un `FutureBuilder`
+/// (lezione 3.5): mentre il Future è in corso mostra lo spinner, quando arriva
+/// la lista disegna i marker.
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
@@ -23,7 +23,9 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  MapViewModel? _viewModel;
+  /// Il Future si crea UNA volta sola (non dentro build), come negli appunti
+  /// con `initState`: altrimenti a ogni ridisegno ripartirebbe il caricamento.
+  Future<List<Vehicle>>? _mezzi;
 
   /// true quando l'utente ha concesso la posizione: mostra il pallino blu.
   bool _posizioneAbilitata = false;
@@ -36,36 +38,18 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_viewModel == null) {
-      _viewModel = MapViewModel(AppScope.of(context).vehicleRepository);
-      _viewModel!.addListener(_osservaViewModel);
-    }
+    // Qui (e non in initState) si può leggere l'InheritedWidget AppScope.
+    _mezzi ??= AppScope.of(context).vehicleRepository.getMezziDisponibili();
   }
 
-  void _osservaViewModel() {
-    final vm = _viewModel!;
-    if (!mounted) return;
-
-    final errore = vm.errore;
-    if (errore != null) {
-      mostraMessaggio(context, errore, azione: 'Riprova', onAzione: vm.caricaMezzi);
-      vm.erroreMostrato();
-    }
-
-    final mezzo = vm.mezzoSelezionato;
-    if (mezzo != null) {
-      vm.deselezionaMezzo(); // consumiamo subito l'evento (anti-loop)
-      _apriDettaglio(mezzo);
-    }
+  void _ricarica() {
+    setState(() {
+      _mezzi = AppScope.of(context).vehicleRepository.getMezziDisponibili();
+    });
   }
 
-  @override
-  void dispose() {
-    _viewModel?.removeListener(_osservaViewModel);
-    _viewModel?.dispose();
-    super.dispose();
-  }
-
+  /// Tap su un marker: apre il dettaglio dal basso. Se l'utente preme
+  /// "Sblocca e parti" il bottom sheet restituisce true e andiamo alla corsa.
   Future<void> _apriDettaglio(Vehicle mezzo) async {
     final sblocca = await showModalBottomSheet<bool>(
       context: context,
@@ -79,10 +63,13 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // ---------------------------------------------------------------
-  //  PERMESSI (pacchetto permission_handler, plugin nativo – lez. 3.0).
-  //  Stessi tre casi del `when` di MapFragment:
-  //  già concesso / va spiegato perché serve / va chiesto.
+  //  PERMESSO DI POSIZIONE (plugin permission_handler).
+  //  Tre casi: già concesso / va spiegato perché serve / va chiesto.
   // ---------------------------------------------------------------
+  static const String _spiegazionePermesso =
+      'Serve la tua posizione per mostrarti i mezzi più vicini. '
+      'Senza, la mappa parte da Ancona centro.';
+
   Future<void> _richiediPermessoPosizione() async {
     final permesso = Permission.locationWhenInUse;
 
@@ -90,20 +77,13 @@ class _MapScreenState extends State<MapScreen> {
       _abilitaPosizioneUtente();
       return;
     }
-
     if (await permesso.shouldShowRequestRationale) {
       // L'utente aveva già negato una volta: spieghiamo perché serve.
       if (!mounted) return;
-      mostraMessaggio(
-        context,
-        'Serve la tua posizione per mostrarti i mezzi più vicini. '
-        'Senza, la mappa parte da Ancona centro.',
-        azione: 'Consenti',
-        onAzione: _chiediPermesso,
-      );
+      mostraMessaggio(context, _spiegazionePermesso,
+          azione: 'Consenti', onAzione: _chiediPermesso);
       return;
     }
-
     await _chiediPermesso();
   }
 
@@ -114,12 +94,8 @@ class _MapScreenState extends State<MapScreen> {
       _abilitaPosizioneUtente();
     } else {
       // Se l'utente nega, l'app NON si blocca: la mappa resta su Ancona
-      // e i mezzi si vedono comunque. La funzionalità degrada, non si interrompe.
-      mostraMessaggio(
-        context,
-        'Serve la tua posizione per mostrarti i mezzi più vicini. '
-        'Senza, la mappa parte da Ancona centro.',
-      );
+      // e i mezzi si vedono comunque.
+      mostraMessaggio(context, _spiegazionePermesso);
     }
   }
 
@@ -127,8 +103,8 @@ class _MapScreenState extends State<MapScreen> {
     if (!_posizioneAbilitata) setState(() => _posizioneAbilitata = true);
   }
 
-  /// Trasforma i mezzi in marker. Marker arancioni per le e-bike, verdi per le
-  /// classiche (RF2), con batteria e tariffa già nel fumetto (RF2.1, RF3).
+  /// Trasforma i mezzi in marker: arancioni le e-bike, verdi le classiche (RF2),
+  /// con batteria e tariffa già nel fumetto (RF2.1, RF3).
   Set<Marker> _creaMarker(List<Vehicle> mezzi) {
     return {
       for (final mezzo in mezzi)
@@ -145,36 +121,57 @@ class _MapScreenState extends State<MapScreen> {
                     ' · ${mezzo.tariffaAlMinutoEuro} €/min'
                 : 'Bici classica · ${mezzo.tariffaAlMinutoEuro} €/min',
           ),
-          onTap: () => _viewModel!.selezionaMezzo(mezzo),
+          onTap: () => _apriDettaglio(mezzo),
         ),
     };
   }
 
   @override
   Widget build(BuildContext context) {
-    final vm = _viewModel!;
-
     return Scaffold(
-      body: ListenableBuilder(
-        listenable: vm,
-        builder: (context, _) => Stack(
-          children: [
-            GoogleMap(
-              initialCameraPosition: _vistaIniziale,
-              markers: _creaMarker(vm.mezzi),
-              myLocationEnabled: _posizioneAbilitata,
-              myLocationButtonEnabled: _posizioneAbilitata,
-              zoomControlsEnabled: true,
-              mapToolbarEnabled: false,
-              // La mappa è pronta solo ora: chiediamo la posizione.
-              onMapCreated: (_) => _richiediPermessoPosizione(),
-            ),
-            if (vm.isLoading)
-              const Center(
-                child: CircularProgressIndicator(color: Colori.verdePrimario),
+      body: FutureBuilder<List<Vehicle>>(
+        future: _mezzi,
+        builder: (context, snapshot) {
+          final mezzi = snapshot.data ?? const <Vehicle>[];
+          return Stack(
+            children: [
+              GoogleMap(
+                initialCameraPosition: _vistaIniziale,
+                markers: _creaMarker(mezzi),
+                myLocationEnabled: _posizioneAbilitata,
+                myLocationButtonEnabled: _posizioneAbilitata,
+                zoomControlsEnabled: true,
+                mapToolbarEnabled: false,
+                // La mappa è pronta solo ora: chiediamo la posizione.
+                onMapCreated: (_) => _richiediPermessoPosizione(),
               ),
-          ],
-        ),
+              // Caricamento in corso
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Center(
+                  child: CircularProgressIndicator(color: Colori.verdePrimario),
+                ),
+              // Errore: messaggio con il tasto per riprovare
+              if (snapshot.hasError)
+                Center(
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Impossibile caricare i mezzi.'),
+                          TextButton(
+                            onPressed: _ricarica,
+                            child: const Text('Riprova'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colori.bianco,

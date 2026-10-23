@@ -37,7 +37,7 @@ class GoRideApp extends StatefulWidget {
 }
 
 class _GoRideAppState extends State<GoRideApp> {
-  // Le dipendenze vanno solo "in giù": schermate → ViewModel → Repository → dati.
+  // Le dipendenze vanno solo "in giù": schermate → Repository → dati (solo la corsa passa dal RideViewModel).
   final _vehicleRepository = VehicleRepository();
   final _userRepository = UserRepository();
   final _rideRepository = RideRepository();

@@ -1,19 +1,23 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import '../../data/models/ride.dart';
 import '../../data/models/vehicle.dart';
 import '../../data/repositories/ride_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../../util/formatters.dart';
-import '../common/view_model.dart';
 
 /// ViewModel della corsa (RF4, RF5, RF6, RF6.1, RF6.2) — il pezzo più delicato.
 /// Stessa logica di `RideViewModel.kt`.
 ///
-/// Vive quanto l'app (sta nell'AppScope): così il timer non si perde se si
-/// esce e si rientra nella schermata.
-class RideViewModel extends ViewModel {
+/// È l'UNICO ViewModel rimasto nel progetto: la corsa deve sopravvivere anche
+/// quando si esce dalla schermata (il timer continua), quindi lo stato non può
+/// stare dentro lo State di un widget, che verrebbe distrutto.
+/// Vive quanto l'app (sta nell'AppScope) ed estende `ChangeNotifier`:
+/// quando lo stato cambia chiama `notifyListeners()` e la schermata si ridisegna.
+class RideViewModel extends ChangeNotifier {
   RideViewModel(this._rideRepository, this._userRepository);
 
   final RideRepository _rideRepository;
