@@ -100,6 +100,13 @@ class RideRepository {
 
   Future<Ride?> getCorsaById(String id) => _rideDao.getCorsaById(id);
 
+  /// true se nel database locale ci sono già corse dell'utente.
+  /// Serve allo storico per decidere se mostrare l'errore di sincronizzazione.
+  Future<bool> haCorseLocali(String userId) async {
+    final corse = await _rideDao.getCorseUtente(userId);
+    return corse.isNotEmpty;
+  }
+
   // ---------- Corsa attiva: ripristino se Android chiude l'app ----------
 
   Future<void> salvaCorsaAttiva({

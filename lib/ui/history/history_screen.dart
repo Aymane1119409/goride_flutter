@@ -49,7 +49,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     try {
       await _repository.sincronizzaDaFirestore(uid);
     } catch (_) {
-      // Senza rete restano visibili le corse già salvate in locale.
+      // Come in Kotlin: se in locale ci sono già corse l'elenco resta quello,
+      // senza errori; il messaggio compare solo se lo storico è vuoto.
+      if (await _repository.haCorseLocali(uid)) return;
       if (mounted) {
         mostraMessaggio(context, 'Impossibile aggiornare lo storico',
             azione: 'Riprova', onAzione: _sincronizza);
@@ -76,25 +78,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     messaggio: 'Le corse che farai compariranno qui',
                   );
                 }
-                // Trascinando verso il basso si risincronizza con Firestore.
-                return RefreshIndicator(
-                  onRefresh: _sincronizza,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: corse.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final corsa = corse[index];
-                      return RideCard(
-                        ride: corsa,
-                        onTap: () => Navigator.pushNamed(
-                          context,
-                          Routes.rideDetail,
-                          arguments: corsa,
-                        ),
-                      );
-                    },
-                  ),
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: corse.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final corsa = corse[index];
+                    return RideCard(
+                      ride: corsa,
+                      onTap: () => Navigator.pushNamed(
+                        context,
+                        Routes.rideDetail,
+                        arguments: corsa,
+                      ),
+                    );
+                  },
                 );
               },
             ),

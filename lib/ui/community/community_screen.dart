@@ -24,6 +24,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
   /// Creato una sola volta, non dentro build.
   Stream<List<Review>>? _recensioni;
 
+  /// Ultimo elenco ricevuto: se Firestore non risponde resta visibile questo,
+  /// senza messaggi di errore (stesso comportamento dell'app Kotlin).
+  List<Review> _ultimeRecensioni = const [];
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -41,14 +45,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
             child: StreamBuilder<List<Review>>(
               stream: _recensioni,
               builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const StatoVuoto(
-                    titolo: 'Errore di connessione',
-                    messaggio: 'Impossibile caricare le recensioni',
-                  );
+                if (snapshot.hasData) _ultimeRecensioni = snapshot.data!;
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Caricamento(visibile: true);
                 }
-                if (!snapshot.hasData) return const Caricamento(visibile: true);
-                final recensioni = snapshot.data!;
+                final recensioni = _ultimeRecensioni;
                 if (recensioni.isEmpty) {
                   return const StatoVuoto(
                     titolo: 'Ancora nessuna recensione',
