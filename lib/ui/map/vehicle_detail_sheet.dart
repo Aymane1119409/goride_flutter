@@ -8,8 +8,8 @@ import '../../util/formatters.dart';
 /// Dettaglio del mezzo in un bottom sheet sopra la mappa (RF2.1, RF3).
 /// Equivalente di `VehicleDetailFragment` (BottomSheetDialogFragment).
 ///
-/// Si chiude restituendo `true` se l'utente ha premuto "Sblocca e parti":
-/// sarà la mappa a navigare verso la corsa.
+/// Si chiude restituendo `true` se l'utente ha premuto "Noleggia":
+/// sarà la mappa a chiedere la durata e a registrare il noleggio.
 class VehicleDetailSheet extends StatelessWidget {
   const VehicleDetailSheet({super.key, required this.mezzo});
 
@@ -82,7 +82,7 @@ class VehicleDetailSheet extends StatelessWidget {
             const SizedBox(height: 28),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Sblocca e parti'),
+              child: const Text('Noleggia'),
             ),
           ],
         ),

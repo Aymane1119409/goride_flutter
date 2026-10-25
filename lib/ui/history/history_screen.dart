@@ -8,12 +8,13 @@ import '../../util/colori.dart';
 import '../common/widget_comuni.dart';
 import 'ride_card.dart';
 
-/// Sezione "Storico" (RF10).
+/// Sezione "Storico" (RF9).
 ///
-/// Lo storico è uno `Stream` letto dal database locale e mostrato con uno
-/// `StreamBuilder` (lezione 3.5): ogni volta che una corsa viene salvata, lo
-/// Stream emette la lista nuova e la schermata si ridisegna da sola.
-/// All'apertura scarica anche le corse da Firestore (sincronizzazione).
+/// All'apertura scarica le corse da Firestore nel database locale e poi le
+/// legge da lì. Il risultato è un `Future`, mostrato con un `FutureBuilder`
+/// (lezione 3.5): spinner mentre carica, poi la lista o lo stato vuoto.
+/// HomeShell ricrea questa schermata ogni volta che l'utente tocca "Storico",
+/// quindi i noleggi appena fatti compaiono subito.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -26,37 +27,46 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String? _uid;
 
   /// Creato una sola volta: se lo creassimo in build, a ogni ridisegno
-  /// lo StreamBuilder ripartirebbe da zero.
-  Stream<List<Ride>>? _storico;
+  /// il caricamento ripartirebbe da zero.
+  Future<List<Ride>>? _corse;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_storico == null) {
+    // Qui (e non in initState) si può leggere l'InheritedWidget AppScope.
+    if (_corse == null) {
       final scope = AppScope.of(context);
       _repository = scope.rideRepository;
       _uid = scope.userRepository.uidCorrente;
-      _storico = _repository.osservaStorico(_uid ?? '');
-      _sincronizza();
+      _corse = _carica();
     }
   }
 
-  /// Scarica le corse da Firestore e le salva nel database locale:
-  /// lo Stream qui sopra se ne accorge e aggiorna la lista.
-  Future<void> _sincronizza() async {
+  /// Sincronizza con Firestore e poi legge le corse dal database locale.
+  /// Senza rete restano visibili le corse già salvate in locale; il messaggio
+  /// di errore compare solo se non ce n'è nessuna (come nell'app Kotlin).
+  Future<List<Ride>> _carica() async {
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) return const [];
+
+    var sincronizzazioneFallita = false;
     try {
       await _repository.sincronizzaDaFirestore(uid);
     } catch (_) {
-      // Come in Kotlin: se in locale ci sono già corse l'elenco resta quello,
-      // senza errori; il messaggio compare solo se lo storico è vuoto.
-      if (await _repository.haCorseLocali(uid)) return;
-      if (mounted) {
-        mostraMessaggio(context, 'Impossibile aggiornare lo storico',
-            azione: 'Riprova', onAzione: _sincronizza);
-      }
+      sincronizzazioneFallita = true;
     }
+    final corse = await _repository.getStorico(uid);
+
+    if (!mounted) return corse;
+    if (sincronizzazioneFallita && corse.isEmpty) {
+      mostraMessaggio(context, 'Impossibile aggiornare lo storico',
+          azione: 'Riprova', onAzione: _ricarica);
+    }
+    return corse;
+  }
+
+  void _ricarica() {
+    setState(() => _corse = _carica());
   }
 
   @override
@@ -67,8 +77,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           const Intestazione('Le tue corse'),
           Expanded(
-            child: StreamBuilder<List<Ride>>(
-              stream: _storico,
+            child: FutureBuilder<List<Ride>>(
+              future: _corse,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const Caricamento(visibile: true);
                 final corse = snapshot.data!;

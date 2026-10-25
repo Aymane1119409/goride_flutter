@@ -10,8 +10,6 @@ class Routes {
   /// Contenitore con la BottomNavigationBar (Mappa, Storico, Community, Profilo).
   static const String home = '/home';
 
-  /// Argomento richiesto: `Vehicle`.
-  static const String ride = '/ride';
 
   /// Argomento richiesto: `Ride`.
   static const String rideDetail = '/ride-detail';

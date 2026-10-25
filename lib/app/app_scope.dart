@@ -4,11 +4,10 @@ import '../data/repositories/review_repository.dart';
 import '../data/repositories/ride_repository.dart';
 import '../data/repositories/user_repository.dart';
 import '../data/repositories/vehicle_repository.dart';
-import '../ui/ride/ride_viewmodel.dart';
 
 /// `InheritedWidget` in cima all'albero dei widget (lezione 3.3).
 ///
-/// Mette a disposizione di TUTTE le schermate i repository e il RideViewModel,
+/// Mette a disposizione di TUTTE le schermate i quattro repository,
 /// senza doverli passare a mano da un costruttore all'altro:
 ///
 /// ```dart
@@ -16,8 +15,7 @@ import '../ui/ride/ride_viewmodel.dart';
 /// scope.userRepository...
 /// ```
 ///
-/// Il RideViewModel sta qui (e non dentro la schermata della corsa) perché deve
-/// vivere quanto l'app: è l'equivalente di `by activityViewModels()` in Kotlin.
+/// Così esiste una sola istanza di ogni repository, condivisa da tutta l'app.
 class AppScope extends InheritedWidget {
   const AppScope({
     super.key,
@@ -25,7 +23,6 @@ class AppScope extends InheritedWidget {
     required this.userRepository,
     required this.rideRepository,
     required this.reviewRepository,
-    required this.rideViewModel,
     required super.child,
   });
 
@@ -33,7 +30,6 @@ class AppScope extends InheritedWidget {
   final UserRepository userRepository;
   final RideRepository rideRepository;
   final ReviewRepository reviewRepository;
-  final RideViewModel rideViewModel;
 
   /// La funzione `of` richiesta dagli appunti.
   static AppScope of(BuildContext context) {

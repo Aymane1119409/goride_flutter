@@ -3,9 +3,9 @@ import 'package:sqflite/sqflite.dart';
 
 /// Database locale SQLite (equivalente di `GoRideDatabase` con Room).
 ///
-/// Due tabelle, come nella versione Kotlin:
-///  - `corse`: cache dello storico (la UI legge sempre da qui → funziona offline)
-///  - `corsa_attiva`: al massimo una riga, per ripristinare la corsa in corso
+/// Una tabella, `corse`: la cache dello storico (la UI legge sempre da qui,
+/// quindi lo storico funziona anche offline). Ha le stesse colonne della
+/// tabella `corse` della versione Kotlin.
 ///
 /// Singleton: il database si apre UNA volta sola. Teniamo in memoria il `Future`
 /// dell'apertura: se due parti dell'app lo chiedono insieme, ricevono lo stesso
@@ -17,7 +17,6 @@ class GoRideDatabase {
   static const int _versione = 1;
 
   static const String tabellaCorse = 'corse';
-  static const String tabellaCorsaAttiva = 'corsa_attiva';
 
   static Future<Database>? _apertura;
 
@@ -43,19 +42,6 @@ class GoRideDatabase {
             tariffaSbloccoEuro REAL NOT NULL,
             tariffaAlMinutoEuro REAL NOT NULL,
             costoTotaleEuro REAL NOT NULL
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE $tabellaCorsaAttiva (
-            id INTEGER PRIMARY KEY,
-            vehicleId TEXT NOT NULL,
-            vehicleNome TEXT NOT NULL,
-            vehicleTipo TEXT NOT NULL,
-            startTimestamp INTEGER NOT NULL,
-            scadenzaTimestamp INTEGER NOT NULL,
-            minutiPrepagati INTEGER NOT NULL,
-            tariffaSbloccoEuro REAL NOT NULL,
-            tariffaAlMinutoEuro REAL NOT NULL
           )
         ''');
       },

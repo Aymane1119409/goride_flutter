@@ -25,15 +25,21 @@ class _HomeShellState extends State<HomeShell> {
   /// finché l'utente non ci entra (niente caricamenti inutili all'avvio).
   final Set<int> _sezioniVisitate = {0};
 
-  static const List<Widget> _sezioni = [
-    MapScreen(),
-    HistoryScreen(),
-    CommunityScreen(),
-    ProfileScreen(),
-  ];
+  /// Cambia ogni volta che l'utente tocca "Storico": con una key nuova
+  /// Flutter ricrea HistoryScreen, che rilegge le corse (anche quelle
+  /// appena noleggiate dalla mappa).
+  int _aperturaStorico = 0;
+
+  List<Widget> get _sezioni => [
+        const MapScreen(),
+        HistoryScreen(key: ValueKey(_aperturaStorico)),
+        const CommunityScreen(),
+        const ProfileScreen(),
+      ];
 
   void _onVoceToccata(int indice) {
     setState(() {
+      if (indice == 1) _aperturaStorico++;
       _indiceSelezionato = indice;
       _sezioniVisitate.add(indice);
     });

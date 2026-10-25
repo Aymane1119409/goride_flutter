@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/app_scope.dart';
-import '../../app/routes.dart';
+import '../../data/models/ride.dart';
 import '../../data/models/vehicle.dart';
 import '../../data/remote/mock_vehicle_data_source.dart';
 import '../../util/colori.dart';
+import '../../util/formatters.dart';
 import '../common/widget_comuni.dart';
 import 'vehicle_detail_sheet.dart';
 
-/// Sezione "Mappa" (RF1, RF2): mezzi disponibili su Google Maps.
+/// Sezione "Mappa" (RF1–RF5): mezzi disponibili su Google Maps e noleggio.
 ///
 /// I mezzi arrivano da un `Future` e vengono mostrati con un `FutureBuilder`
 /// (lezione 3.5): mentre il Future è in corso mostra lo spinner, quando arriva
@@ -23,12 +23,12 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
-  /// Il Future si crea UNA volta sola (non dentro build), come negli appunti
-  /// con `initState`: altrimenti a ogni ridisegno ripartirebbe il caricamento.
+  /// Il Future si crea UNA volta sola (non dentro build): altrimenti a ogni
+  /// ridisegno ripartirebbe il caricamento.
   Future<List<Vehicle>>? _mezzi;
 
-  /// true quando l'utente ha concesso la posizione: mostra il pallino blu.
-  bool _posizioneAbilitata = false;
+  /// Durate acquistabili, come nell'app Kotlin.
+  static const List<int> _durate = [15, 30, 60];
 
   static const CameraPosition _vistaIniziale = CameraPosition(
     target: LatLng(MockVehicleDataSource.anconaLat, MockVehicleDataSource.anconaLon),
@@ -49,58 +49,65 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Tap su un marker: apre il dettaglio dal basso. Se l'utente preme
-  /// "Sblocca e parti" il bottom sheet restituisce true e andiamo alla corsa.
+  /// "Noleggia" il bottom sheet restituisce true e si passa al noleggio.
   Future<void> _apriDettaglio(Vehicle mezzo) async {
-    final sblocca = await showModalBottomSheet<bool>(
+    final noleggia = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colori.bianco,
       builder: (context) => VehicleDetailSheet(mezzo: mezzo),
     );
-    if (sblocca == true && mounted) {
-      // Rotta con nome + argomento (lezione 3.4): passiamo il Vehicle alla corsa.
-      Navigator.pushNamed(context, Routes.ride, arguments: mezzo);
-    }
+    if (noleggia == true && mounted) await _noleggia(mezzo);
   }
 
-  // ---------------------------------------------------------------
-  //  PERMESSO DI POSIZIONE (plugin permission_handler).
-  //  Tre casi: già concesso / va spiegato perché serve / va chiesto.
-  // ---------------------------------------------------------------
-  static const String _spiegazionePermesso =
-      'Serve la tua posizione per mostrarti i mezzi più vicini. '
-      'Senza, la mappa parte da Ancona centro.';
+  /// Prezzo del noleggio = tariffa di sblocco + minuti × tariffa al minuto.
+  double _prezzo(Vehicle mezzo, int minuti) =>
+      mezzo.tariffaSbloccoEuro + minuti * mezzo.tariffaAlMinutoEuro;
 
-  Future<void> _richiediPermessoPosizione() async {
-    final permesso = Permission.locationWhenInUse;
+  /// RF5 — l'utente sceglie la durata, il prezzo è calcolato subito e la
+  /// corsa viene registrata nello storico. Non c'è nessun timer.
+  Future<void> _noleggia(Vehicle mezzo) async {
+    // 1. Scelta della durata: accanto a ogni durata c'è il prezzo.
+    final minuti = await showDialog<int>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Quanto tempo ti serve?'),
+        children: [
+          for (final durata in _durate)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, durata),
+              child: Text(
+                '$durata minuti — ${Formatters.euro(_prezzo(mezzo, durata))}',
+              ),
+            ),
+        ],
+      ),
+    );
+    if (minuti == null || !mounted) return; // chiuso senza scegliere
 
-    if (await permesso.isGranted) {
-      _abilitaPosizioneUtente();
-      return;
+    // 2. La corsa nasce già conclusa: durata e prezzo sono fissi.
+    final scope = AppScope.of(context);
+    final uid = scope.userRepository.uidCorrente;
+    if (uid == null) return;
+    final inizio = DateTime.now().millisecondsSinceEpoch;
+    final corsa = Ride(
+      id: '${uid}_$inizio',
+      userId: uid,
+      vehicleId: mezzo.id,
+      vehicleNome: mezzo.nome,
+      vehicleTipo: mezzo.tipo,
+      startTimestamp: inizio,
+      endTimestamp: inizio + minuti * 60000,
+      minutiPrepagati: minuti,
+      tariffaSbloccoEuro: mezzo.tariffaSbloccoEuro,
+      tariffaAlMinutoEuro: mezzo.tariffaAlMinutoEuro,
+      costoTotaleEuro: _prezzo(mezzo, minuti),
+    );
+
+    // 3. Salvataggio: prima il database locale, poi Firestore.
+    await scope.rideRepository.salvaCorsa(corsa);
+    if (mounted) {
+      mostraMessaggio(context, 'Noleggio registrato: lo trovi nello storico');
     }
-    if (await permesso.shouldShowRequestRationale) {
-      // L'utente aveva già negato una volta: spieghiamo perché serve.
-      if (!mounted) return;
-      mostraMessaggio(context, _spiegazionePermesso,
-          azione: 'Consenti', onAzione: _chiediPermesso);
-      return;
-    }
-    await _chiediPermesso();
-  }
-
-  Future<void> _chiediPermesso() async {
-    final stato = await Permission.locationWhenInUse.request();
-    if (!mounted) return;
-    if (stato.isGranted) {
-      _abilitaPosizioneUtente();
-    } else {
-      // Se l'utente nega, l'app NON si blocca: la mappa resta su Ancona
-      // e i mezzi si vedono comunque.
-      mostraMessaggio(context, _spiegazionePermesso);
-    }
-  }
-
-  void _abilitaPosizioneUtente() {
-    if (!_posizioneAbilitata) setState(() => _posizioneAbilitata = true);
   }
 
   /// Trasforma i mezzi in marker: arancioni le e-bike, verdi le classiche (RF2),
@@ -138,12 +145,8 @@ class _MapScreenState extends State<MapScreen> {
               GoogleMap(
                 initialCameraPosition: _vistaIniziale,
                 markers: _creaMarker(mezzi),
-                myLocationEnabled: _posizioneAbilitata,
-                myLocationButtonEnabled: _posizioneAbilitata,
                 zoomControlsEnabled: true,
                 mapToolbarEnabled: false,
-                // La mappa è pronta solo ora: chiediamo la posizione.
-                onMapCreated: (_) => _richiediPermessoPosizione(),
               ),
               // Caricamento in corso
               if (snapshot.connectionState == ConnectionState.waiting)
@@ -173,13 +176,6 @@ class _MapScreenState extends State<MapScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colori.bianco,
-        tooltip: 'Centra sulla mia posizione',
-        onPressed: _richiediPermessoPosizione,
-        child: const Icon(Icons.my_location, color: Colori.verdePrimario),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

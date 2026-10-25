@@ -15,8 +15,6 @@ import 'ui/auth/register_screen.dart';
 import 'ui/community/new_review_screen.dart';
 import 'ui/history/ride_detail_screen.dart';
 import 'ui/home/home_shell.dart';
-import 'ui/ride/ride_screen.dart';
-import 'ui/ride/ride_viewmodel.dart';
 
 Future<void> main() async {
   // Serve prima di usare plugin nativi (Firebase) prima di runApp.
@@ -27,8 +25,8 @@ Future<void> main() async {
   runApp(const GoRideApp());
 }
 
-/// Widget radice. È Stateful perché crea UNA volta i repository e il
-/// RideViewModel globale, li tiene in vita e li libera in `dispose`.
+/// Widget radice. È Stateful perché crea UNA volta i repository e li tiene
+/// in vita per tutta la durata dell'app.
 class GoRideApp extends StatefulWidget {
   const GoRideApp({super.key});
 
@@ -37,21 +35,11 @@ class GoRideApp extends StatefulWidget {
 }
 
 class _GoRideAppState extends State<GoRideApp> {
-  // Le dipendenze vanno solo "in giù": schermate → Repository → dati (solo la corsa passa dal RideViewModel).
+  // Le dipendenze vanno solo "in giù": schermate → Repository → dati.
   final _vehicleRepository = VehicleRepository();
   final _userRepository = UserRepository();
   final _rideRepository = RideRepository();
   final _reviewRepository = ReviewRepository();
-
-  late final RideViewModel _rideViewModel =
-      RideViewModel(_rideRepository, _userRepository);
-
-  @override
-  void dispose() {
-    _rideViewModel.dispose();
-    _rideRepository.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +48,6 @@ class _GoRideAppState extends State<GoRideApp> {
       userRepository: _userRepository,
       rideRepository: _rideRepository,
       reviewRepository: _reviewRepository,
-      rideViewModel: _rideViewModel,
       child: MaterialApp(
         title: 'GoRide',
         debugShowCheckedModeBanner: false,
@@ -73,7 +60,6 @@ class _GoRideAppState extends State<GoRideApp> {
           Routes.register: (context) => const RegisterScreen(),
           Routes.forgotPassword: (context) => const ForgotPasswordScreen(),
           Routes.home: (context) => const HomeShell(),
-          Routes.ride: (context) => const RideScreen(),
           Routes.rideDetail: (context) => const RideDetailScreen(),
           Routes.newReview: (context) => const NewReviewScreen(),
         },
